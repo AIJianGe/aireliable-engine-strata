@@ -1,0 +1,48 @@
+# Strata LLM 推理引擎注册片段（引擎内副本）
+# 说明：
+#   - 本文件是 engines/strata_llm_7c4f2b91/ 的自描述注册片段
+#   - 导入 .airengine 包时会被拷到 config/engines/strata_llm_7c4f2b91.yaml
+#   - 与 config/engines/strata_llm_7c4f2b91.yaml 保持逐字一致
+#
+# ⚠️ 不得声明 code_path（平台级强制）：
+#   声明 code_path → EngineManager 把子进程 cwd 设为该目录；
+#   而 startup_cmd 用的是模块形式 `python -m engines.strata_llm_7c4f2b91.server`，
+#   该形式**要求 cwd = 项目根**（`engines` 才是可导入包）。
+#   二者冲突 → ModuleNotFoundError: No module named 'engines'，引擎完全无法启动；
+#   且 output/ 会落到引擎目录内。正确做法：不声明 code_path。
+#   （与全部既有引擎含 llama_cpp_9cdb76f8 / video_up_enlarge_98782fcd 一致）
+
+engine_id: strata_llm_7c4f2b91
+engine_name: Strata
+capability: chat
+capabilities:
+    - chat
+type: llm
+
+paradigm: integrated
+sdk_version: ">=0.2.14.8"
+engine_uid: aireliable://strata/llm/strata_llm
+engine_version: "0.1.45"
+
+deployment:
+    mode: local
+    local_config:
+        port: 7010
+        uv_env: envs/llm-strata
+        startup_cmd: "python -m engines.strata_llm_7c4f2b91.server --port 7010"
+        env:
+            STRATA_BINS_DIR: "D:/myProInstallDir/VLLM/strata/strata-bins"
+            STRATA_DATA_DIR: "D:/myProInstallDir/VLLM/strata/data"
+            STRATA_INTERNAL_PORT_START: "8100"
+            STRATA_INTERNAL_PORT_END: "8200"
+            STRATA_SPEC: "4"
+    remote_config:
+        url: ""
+        auth_token: ""
+
+default_residency: cold
+
+env_config:
+    requires_torch: false
+    requires_python: ">=3.10,<3.13"
+    supports_device_policy: true

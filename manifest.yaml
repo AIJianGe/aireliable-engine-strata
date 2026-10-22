@@ -1,0 +1,395 @@
+engine_id: strata_llm_7c4f2b91
+engine_name: Strata
+engine_version: 0.1.0
+aireliable_compat: '>=0.0.16'
+uv_env_name: llm-strata
+export_mode: source
+description: Strata LLM 推理引擎（Qwen3.8-Flash-Next 125B MoE，GGUF 分片，6 命名模式）
+engine_uid: aireliable://strata/llm/strata_llm
+paradigm: integrated
+sdk_version: '>=0.3.0'
+
+author:
+  name: AI剑歌
+  github: https://github.com/Niko1221/Strata
+  license: MIT
+
+third_party_references:
+  - name: Strata
+    author: Niko1221
+    github: https://github.com/Niko1221/Strata
+    license: MIT
+    description: 外部推理二进制（strata.exe / strata-vision.exe）与 WebUI 设计资产
+  - name: Qwen3.8-Flash-Next GSQ-RCO GGUF
+    author: ISTA-DASLab
+    github: https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF
+    license: Apache-2.0
+    description: 主家族 GGUF 分片（Q2_0 / IQ2_XS / IQ3_XXS）+ mmproj
+    # 注：MTP draft 层不是可下载资产，由 Strata setup.py 从 Qwen BF16 checkpoint
+    #     抽取构建到运行时数据目录（<data_dir>/mtp/），故不在 model_files 中登记
+  - name: Qwen3.8-Flash-Next Coder GSQ-RCO GGUF
+    author: ISTA-DASLab
+    github: https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF
+    license: Apache-2.0
+    description: 编程家族 GGUF 分片（IQ1_M）
+
+source:
+  type: github
+  github_repo: Niko1221/Strata
+
+# R22：官方二进制更新检查关闭（避免误升级导致运行时不一致）
+upgrade:
+  check_url: https://api.github.com/repos/Niko1221/Strata/releases/latest
+  auto_check: false
+
+node_packages: []
+
+env_config:
+  requires_torch: false
+  requires_python: '>=3.10,<3.13'
+  # 设备策略：声明后平台会注入 AIRELIABLE_DEVICE_POLICY（auto/gpu/gpu+cpu/cpu），
+  # 引擎据此解析设备（config.resolve_device）；gpu+cpu 的层溢出由 strata.exe
+  # 自身 --expert-cache auto 机制处理，Python 层不介入。
+  supports_device_policy: true
+  notes: |
+    Strata 是外部二进制包装层，不依赖 torch；GPU 由 strata.exe 自身 CUDA 后端驱动。
+    Turing(sm_75) 不支持 BF16/FP8/FlashAttention-2：MTP 投机解码深度锁 4
+    （STRATA_SPEC 可设 0 关闭以隔离问题），--expert-cache 锁 auto（绝不写死窗口大小）。
+
+models:
+  model_layout:
+    base: llm/checkpoints/strata/
+  # 默认模式（★均衡）：BaseEngine._read_default_variant_from_manifest 读取
+  default_variant: strata/balanced
+
+  # ===== 6 命名模式（与 engines/strata_llm_7c4f2b91/schemas.py 的 MODES 逐字一致）=====
+  variants:
+    # —— 1. 极速 ——
+    - name: strata/fast
+      alias:
+        - strata-fast
+      base_model: Qwen3.8-Flash-Next
+      precision: Q2_0
+      loader: strata
+      # 真实「显存」需求（非内存）：Strata 官方门槛 12GB+（AI_SETUP.md L45-48）
+      vram_required: 12GB
+      path: llm/checkpoints/strata/Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00001-of-00002.gguf
+      model_file_ids:
+        - strata-main-q2_0-s1
+        - strata-main-q2_0-s2
+      supports_mmproj: false
+      uv_env: envs/llm-strata
+      ctx:
+        recommended: 32768
+        min: 8192
+        max: 65536
+      description: 极速档：Q2_0 权重 + 32K 上下文；门槛最低（RAM 48GB / 磁盘约 66GB）
+      extra:
+        mtp: false
+        vision: false
+      ram_required_gb: 48
+      disk_required_gb: 66.4
+
+    # —— 2. 均衡（★默认）——
+    - name: strata/balanced
+      alias:
+        - strata-balanced
+        - strata          # 超短别名（32 位输入限制场景）
+      base_model: Qwen3.8-Flash-Next
+      precision: IQ2_XS
+      loader: strata
+      vram_required: 12GB
+      path: llm/checkpoints/strata/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf
+      model_file_ids:
+        - strata-main-iq2_xs-s1
+        - strata-main-iq2_xs-s2
+        - strata-mmproj
+      supports_mmproj: true
+      uv_env: envs/llm-strata
+      ctx:
+        recommended: 131072
+        min: 32768
+        max: 131072
+      description: 均衡档（★默认）：IQ2_XS 权重 + 128K 上下文 + MTP 加速 + vision（RAM 48GB / 磁盘约 68GB）
+      extra:
+        mtp: true
+        vision: true
+      ram_required_gb: 48
+      disk_required_gb: 68.0
+
+    # —— 3. 质量 ——
+    - name: strata/quality
+      alias:
+        - strata-quality
+      base_model: Qwen3.8-Flash-Next
+      precision: IQ3_XXS
+      loader: strata
+      # 质量档专家更多、CPU 占比更高，VRAM 略高更稳（16GB）
+      vram_required: 16GB
+      path: llm/checkpoints/strata/Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00001-of-00002.gguf
+      model_file_ids:
+        - strata-main-iq3_xxs-s1
+        - strata-main-iq3_xxs-s2
+      supports_mmproj: false
+      uv_env: envs/llm-strata
+      ctx:
+        recommended: 131072
+        min: 32768
+        max: 131072
+      description: 质量档：IQ3_XXS 权重 + 128K 上下文；质量优先（RAM 60GB / 磁盘约 76GB）
+      extra:
+        mtp: false
+        vision: false
+      ram_required_gb: 60
+      disk_required_gb: 75.8
+
+    # —— 4. 长文 ——
+    - name: strata/long
+      alias:
+        - strata-long
+      base_model: Qwen3.8-Flash-Next
+      precision: IQ2_XS
+      loader: strata
+      # 256K 档：KV 流式（--kv-resident 32768）→ KV 主体在 RAM，显存只需 12GB
+      vram_required: 12GB
+      path: llm/checkpoints/strata/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf
+      model_file_ids:
+        - strata-main-iq2_xs-s1
+        - strata-main-iq2_xs-s2
+      supports_mmproj: false
+      uv_env: envs/llm-strata
+      ctx:
+        recommended: 262144
+        min: 131072
+        max: 262144
+      description: 长文档档：IQ2_XS 权重 + 256K 上下文；长文本处理（RAM 48GB / 磁盘约 68GB）
+      extra:
+        mtp: false
+        vision: false
+      ram_required_gb: 48
+      disk_required_gb: 68.0
+
+    # —— 5. 编程 ——
+    - name: strata/coder
+      alias:
+        - strata-coder
+      base_model: Qwen3.8-Flash-Next-Coder
+      precision: IQ1_M
+      loader: strata
+      # 6-12GB 卡的现实落点（IQ1_M 专家数减半，官方：「72% 专家读命中 12GB 卡」）
+      vram_required: 8GB
+      path: llm/checkpoints/strata/Qwen3.8-Flash-Next-Coder-GSQ-RCO-IQ1_M-00001-of-00002.gguf
+      model_file_ids:
+        - strata-coder-iq1_m-s1
+        - strata-coder-iq1_m-s2
+      supports_mmproj: false
+      uv_env: envs/llm-strata
+      ctx:
+        recommended: 32768
+        min: 8192
+        max: 65536
+      description: 编程档：Coder 家族 IQ1_M 权重 + 32K 上下文；代码生成（RAM 32GB / 磁盘约 58GB）
+      extra:
+        mtp: false
+        vision: false
+      ram_required_gb: 32
+      disk_required_gb: 58.4
+      # 低显存 ⚠️ 提示（T3.2）：仅「低显存档」声明，供 UI 渲染徽标
+      low_vram_note: "⚠️ 低显存档（8GB；6GB 级为实验性）：需 RAM ≥32GB + NVMe SSD，显存不足时专家层落盘、速度显著变慢，不承诺速度。"
+
+    # —— 6. 精简 ——
+    - name: strata/compact
+      alias:
+        - strata-compact
+      base_model: Qwen3.8-Flash-Next
+      precision: IQ2_XS
+      loader: strata
+      vram_required: 12GB
+      path: llm/checkpoints/strata/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf
+      model_file_ids:
+        - strata-main-iq2_xs-s1
+        - strata-main-iq2_xs-s2
+      supports_mmproj: false
+      uv_env: envs/llm-strata
+      ctx:
+        recommended: 32768
+        min: 8192
+        max: 65536
+      description: 精简档：IQ2_XS 权重（低内存模式）+ 32K 上下文；为内存紧张环境降 KV 占用
+      extra:
+        mtp: false
+        vision: false
+      ram_required_gb: 48
+      disk_required_gb: 68.0
+
+  # ===== 模型文件（GGUF 分片 + mmproj）=====
+  # ⚠️ model_file_ids 的并集必须 == 本列表的 id 集合（project-rules §二.1）
+  # ⚠️ size_bytes 一律为 0（TODO(实测)）：本轮未下载（68–84GB），
+  #    待 T5.2 经 HF API 校准后再回填真实字节数，不写死假值
+  model_files:
+    # —— 主家族 · Q2_0 分片（极速）——
+    - id: strata-main-q2_0-s1
+      role: main
+      filename: Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00001-of-00002.gguf
+      target_dir: llm/checkpoints/strata/
+      size_bytes: 0                     # TODO(实测)
+      precision: Q2_0
+      format: gguf
+      exclusive_group: strata-gguf
+      required_for:
+        - strata/fast
+      source:
+        type: huggingface
+        repo_id: ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF
+        filename: Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00001-of-00002.gguf
+        url: https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/resolve/main/Q2_0/Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00001-of-00002.gguf
+        mirror_url: https://hf-mirror.com/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/resolve/main/Q2_0/Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00001-of-00002.gguf
+      description: Qwen3.8-Flash-Next Q2_0 分片 1/2（极速档）
+    - id: strata-main-q2_0-s2
+      role: main
+      filename: Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00002-of-00002.gguf
+      target_dir: llm/checkpoints/strata/
+      size_bytes: 0                     # TODO(实测)
+      precision: Q2_0
+      format: gguf
+      exclusive_group: strata-gguf
+      required_for:
+        - strata/fast
+      source:
+        type: huggingface
+        repo_id: ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF
+        filename: Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00002-of-00002.gguf
+        url: https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/resolve/main/Q2_0/Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00002-of-00002.gguf
+        mirror_url: https://hf-mirror.com/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/resolve/main/Q2_0/Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00002-of-00002.gguf
+      description: Qwen3.8-Flash-Next Q2_0 分片 2/2（极速档）
+
+    # —— 主家族 · IQ2_XS 分片（均衡 / 长文 / 精简共用）——
+    - id: strata-main-iq2_xs-s1
+      role: main
+      filename: Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf
+      target_dir: llm/checkpoints/strata/
+      size_bytes: 0                     # TODO(实测)
+      precision: IQ2_XS
+      format: gguf
+      exclusive_group: strata-gguf
+      required_for:
+        - strata/balanced
+        - strata/long
+        - strata/compact
+      source:
+        type: huggingface
+        repo_id: ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF
+        filename: Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf
+        url: https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/resolve/main/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf
+        mirror_url: https://hf-mirror.com/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/resolve/main/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf
+      description: Qwen3.8-Flash-Next IQ2_XS 分片 1/2（均衡/长文/精简档共用）
+    - id: strata-main-iq2_xs-s2
+      role: main
+      filename: Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00002-of-00002.gguf
+      target_dir: llm/checkpoints/strata/
+      size_bytes: 0                     # TODO(实测)
+      precision: IQ2_XS
+      format: gguf
+      exclusive_group: strata-gguf
+      required_for:
+        - strata/balanced
+        - strata/long
+        - strata/compact
+      source:
+        type: huggingface
+        repo_id: ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF
+        filename: Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00002-of-00002.gguf
+        url: https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/resolve/main/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00002-of-00002.gguf
+        mirror_url: https://hf-mirror.com/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/resolve/main/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00002-of-00002.gguf
+      description: Qwen3.8-Flash-Next IQ2_XS 分片 2/2（均衡/长文/精简档共用）
+
+    # —— 主家族 · IQ3_XXS 分片（质量）——
+    - id: strata-main-iq3_xxs-s1
+      role: main
+      filename: Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00001-of-00002.gguf
+      target_dir: llm/checkpoints/strata/
+      size_bytes: 0                     # TODO(实测)
+      precision: IQ3_XXS
+      format: gguf
+      exclusive_group: strata-gguf
+      required_for:
+        - strata/quality
+      source:
+        type: huggingface
+        repo_id: ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF
+        filename: Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00001-of-00002.gguf
+        url: https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/resolve/main/IQ3_XXS/Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00001-of-00002.gguf
+        mirror_url: https://hf-mirror.com/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/resolve/main/IQ3_XXS/Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00001-of-00002.gguf
+      description: Qwen3.8-Flash-Next IQ3_XXS 分片 1/2（质量档）
+    - id: strata-main-iq3_xxs-s2
+      role: main
+      filename: Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00002-of-00002.gguf
+      target_dir: llm/checkpoints/strata/
+      size_bytes: 0                     # TODO(实测)
+      precision: IQ3_XXS
+      format: gguf
+      exclusive_group: strata-gguf
+      required_for:
+        - strata/quality
+      source:
+        type: huggingface
+        repo_id: ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF
+        filename: Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00002-of-00002.gguf
+        url: https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/resolve/main/IQ3_XXS/Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00002-of-00002.gguf
+        mirror_url: https://hf-mirror.com/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/resolve/main/IQ3_XXS/Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00002-of-00002.gguf
+      description: Qwen3.8-Flash-Next IQ3_XXS 分片 2/2（质量档）
+
+    # —— Coder 家族 · IQ1_M 分片（编程）——
+    - id: strata-coder-iq1_m-s1
+      role: main
+      filename: Qwen3.8-Flash-Next-Coder-GSQ-RCO-IQ1_M-00001-of-00002.gguf
+      target_dir: llm/checkpoints/strata/
+      size_bytes: 0                     # TODO(实测)
+      precision: IQ1_M
+      format: gguf
+      exclusive_group: strata-gguf
+      required_for:
+        - strata/coder
+      source:
+        type: huggingface
+        repo_id: ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF
+        filename: Qwen3.8-Flash-Next-Coder-GSQ-RCO-IQ1_M-00001-of-00002.gguf
+        url: https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF/resolve/main/IQ1_M/Qwen3.8-Flash-Next-Coder-GSQ-RCO-IQ1_M-00001-of-00002.gguf
+        mirror_url: https://hf-mirror.com/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF/resolve/main/IQ1_M/Qwen3.8-Flash-Next-Coder-GSQ-RCO-IQ1_M-00001-of-00002.gguf
+      description: Qwen3.8-Flash-Next-Coder IQ1_M 分片 1/2（编程档）
+    - id: strata-coder-iq1_m-s2
+      role: main
+      filename: Qwen3.8-Flash-Next-Coder-GSQ-RCO-IQ1_M-00002-of-00002.gguf
+      target_dir: llm/checkpoints/strata/
+      size_bytes: 0                     # TODO(实测)
+      precision: IQ1_M
+      format: gguf
+      exclusive_group: strata-gguf
+      required_for:
+        - strata/coder
+      source:
+        type: huggingface
+        repo_id: ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF
+        filename: Qwen3.8-Flash-Next-Coder-GSQ-RCO-IQ1_M-00002-of-00002.gguf
+        url: https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF/resolve/main/IQ1_M/Qwen3.8-Flash-Next-Coder-GSQ-RCO-IQ1_M-00002-of-00002.gguf
+        mirror_url: https://hf-mirror.com/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF/resolve/main/IQ1_M/Qwen3.8-Flash-Next-Coder-GSQ-RCO-IQ1_M-00002-of-00002.gguf
+      description: Qwen3.8-Flash-Next-Coder IQ1_M 分片 2/2（编程档）
+
+    # —— mmproj（均衡档 vision 专用）——
+    - id: strata-mmproj
+      role: mmproj
+      filename: mmproj-Qwen3.8-Flash-Next-BF16.gguf
+      target_dir: llm/checkpoints/strata/
+      size_bytes: 0                     # TODO(实测)
+      precision: bf16
+      format: gguf
+      exclusive_group: strata-mmproj
+      required_for:
+        - strata/balanced
+      source:
+        type: huggingface
+        repo_id: ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF
+        filename: mmproj-Qwen3.8-Flash-Next-BF16.gguf
+        url: https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/resolve/main/mmproj-Qwen3.8-Flash-Next-BF16.gguf
+        mirror_url: https://hf-mirror.com/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/resolve/main/mmproj-Qwen3.8-Flash-Next-BF16.gguf
+      description: 多模态投影 mmproj（均衡档 vision 使用；TODO(实测) 文件名/体积）

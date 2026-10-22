@@ -1,0 +1,12 @@
+Strata (strata_llm_7c4f2b91)
+Copyright (c) 2026 AIReliable Team. All rights reserved.
+
+License: AIReliable Engine License 1.0（source-available，非 OSI 开源）
+Engine repository: 待发布
+Engine version: 0.1.0
+
+本引擎可能使用或按需下载以下第三方组件，其版权与许可归各自作者所有：
+
+- Strata | License: MIT
+- Qwen3.8-Flash-Next GSQ-RCO GGUF | License: Apache-2.0
+- Qwen3.8-Flash-Next Coder GSQ-RCO GGUF | License: Apache-2.0

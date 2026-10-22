@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Strata LLM · 引擎未启动</title>
+<!--
+  引擎未加载时的 /ui/ 兜底页（由 server.py 本地返回，不经反代）。
+  自包含：不引用任何外部资源 —— 因为此时原生服务进程还不存在，
+  /ui/web/* 之类的原生静态资源都取不到。
+  点击「启动引擎」→ POST /load（平台端点，绝对路径）→ 轮询 /status → 就绪后跳 /ui/。
+-->
+<style>
+  :root{
+    --bg:#f4f6f8; --surface:#fff; --line:#dee5ee; --ink:#221e1f; --ink-muted:#6f6f6f;
+    --accent:#10b981; --accent-hover:#0c8a60; --accent-ink:#fff;
+    --warn:#e39b0b; --warn-tint:#fff6e0; --warn-text:#8a5a00;
+    --danger:#e0283f; --danger-tint:#fdecee; --danger-text:#b01a2e;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0f1214; --surface:#161a1d; --line:#2a3036; --ink:#eef1f3; --ink-muted:#8e979f;
+      --accent:#34d399; --accent-hover:#4ade80; --accent-ink:#052e20;
+      --warn:#f5b53d; --warn-tint:rgba(245,181,61,.12); --warn-text:#f8c96a;
+      --danger:#ff5a6e; --danger-tint:rgba(255,90,110,.12); --danger-text:#ff8a98;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:var(--bg); color:var(--ink); display:flex; align-items:center; justify-content:center;
+    padding:24px;
+    font:400 14px/1.6 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+  }
+  .card{
+    width:min(620px,100%); background:var(--surface); border:1px solid var(--line);
+    border-radius:18px; padding:28px 30px; box-shadow:0 18px 48px rgba(0,0,0,.12);
+  }
+  .brand{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:800;letter-spacing:-.01em}
+  .brand small{font-weight:400;font-size:12px;color:var(--ink-muted);border:1px solid var(--line);
+    border-radius:999px;padding:2px 8px}
+  .sub{color:var(--ink-muted);margin:8px 0 22px}
+  .field{display:block;margin-bottom:16px}
+  .label{display:block;font-size:12px;color:var(--ink-muted);margin-bottom:6px}
+  select{
+    width:100%; appearance:none; background:var(--surface); color:var(--ink);
+    border:1px solid var(--line); border-radius:10px; padding:10px 34px 10px 12px; font:inherit; cursor:pointer;
+    background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);
+    background-position:calc(100% - 17px) 50%,calc(100% - 12px) 50%;
+    background-size:5px 5px,5px 5px; background-repeat:no-repeat;
+  }
+  select:disabled{opacity:.55;cursor:progress}
+  .hw{
+    display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 20px;
+  }
+  .chip{border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12px;color:var(--ink-muted)}
+  .actions{display:flex;align-items:center;gap:12px;margin-top:6px}
+  button{
+    border:1px solid var(--line);background:var(--surface);color:var(--ink);
+    border-radius:10px;padding:10px 18px;font:inherit;font-weight:600;cursor:pointer;
+  }
+  button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+  button.primary:hover:not(:disabled){background:var(--accent-hover)}
+  button:disabled{opacity:.6;cursor:not-allowed}
+  .status{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-muted)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--ink-muted);flex:none}
+  .dot.on{background:var(--warn);animation:blink 1s ease-in-out infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+  .progress{height:6px;border-radius:999px;background:var(--line);overflow:hidden;margin-top:14px}
+  .progress__bar{height:100%;width:0;background:var(--warn);transition:width .4s ease}
+  .elapsed{font-variant-numeric:tabular-nums;color:var(--warn-text);font-size:12px;margin-top:6px}
+  .warn{margin-top:16px;padding:10px 12px;border-radius:10px;background:var(--warn-tint);color:var(--warn-text);font-size:13px}
+  .err{margin-top:16px;padding:12px;border-radius:10px;background:var(--danger-tint);color:var(--danger-text);
+    font-size:12.5px;white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto}
+  .hint{margin-top:14px;font-size:12px;color:var(--ink-muted)}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="brand">Strata LLM <small>推理引擎</small></div>
+  <p class="sub">引擎尚未加载。选择一个运行模式并启动；首次启动需要把 35–55GB 权重载入显存/内存，通常 60–90s（首轮还会建立权重索引缓存，可能更久）。</p>
+
+  <label class="field">
+    <span class="label">运行模式（不同模式 = 不同模型档位 / 上下文长度）</span>
+    <select id="mode" disabled><option>正在读取可用模式…</option></select>
+  </label>
+
+  <div class="hw" id="hw"><span class="chip">硬件：检测中…</span></div>
+
+  <div class="actions">
+    <button class="primary" id="go" disabled>启动引擎</button>
+    <span class="status"><span class="dot" id="dot"></span><span id="text">待启动</span></span>
+  </div>
+
+  <div class="progress"><div class="progress__bar" id="bar"></div></div>
+  <div class="elapsed" id="elapsed" hidden></div>
+
+  <div class="warn" id="warn" hidden></div>
+  <div class="err" id="err" hidden></div>
+
+  <p class="hint">提示：也可以在平台「引擎详情页」启动本引擎；启动完成后本页会自动跳转到原生界面。</p>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var timers = [];
+  var polling = false;
+
+  function api(path, opts) {
+    return fetch(path, opts || { cache: 'no-store' }).then(function (r) {
+      if (r.ok) return r.json();
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        var m = (j && j.error && j.error.message) || (j && j.detail) || ('HTTP ' + r.status);
+        var e = new Error(typeof m === 'string' ? m : JSON.stringify(m));
+        e.status = r.status;
+        throw e;
+      });
+    });
+  }
+
+  /* ---------------- 初始化：模式 + 硬件 + 已在运行则直接跳转 ---------------- */
+
+  api('/status').then(function (s) {
+    if (s && s.extra && s.extra.is_running) {
+      $('text').textContent = '引擎已就绪，正在进入界面…';
+      location.replace('/ui/');
+    }
+  }).catch(function () {});
+
+  api('/capabilities').then(function (c) {
+    var list = (c.variants || []);
+    var recommended = c.default_variant;
+    return api('/hardware').then(function (hw) {
+      if (hw && hw.recommended_mode) recommended = hw.recommended_mode;
+      renderHw(hw);
+      return { list: list, recommended: recommended };
+    }).catch(function () { return { list: list, recommended: recommended }; });
+  }).then(function (r) {
+    var sel = $('mode');
+    sel.innerHTML = '';
+    r.list.forEach(function (v) {
+      var o = document.createElement('option');
+      o.value = v.name;
+      var tags = [];
+      if (v.mode_label) tags.push(v.mode_label);
+      var quant = v.quant || v.precision;   // 能力声明里量化档字段是 precision
+      if (quant) tags.push(quant);
+      if (v.ctx_recommended) tags.push((v.ctx_recommended / 1024) + 'K');
+      if (v.mtp) tags.push('MTP');
+      if (v.vision) tags.push('vision');
+      var label = tags.join(' · ') || v.name;
+      if (v.name === r.recommended) label = '★ ' + label + '（本机推荐）';
+      if (!v.available) label += '（未下载）';
+      o.textContent = label;
+      o.disabled = !v.available;
+      sel.appendChild(o);
+    });
+    if (r.recommended) sel.value = r.recommended;
+    sel.disabled = false;
+    $('go').disabled = false;
+  }).catch(function (e) {
+    showErr('读取引擎能力失败：' + (e.message || e));
+  });
+
+  function renderHw(hw) {
+    var d = (hw && hw.hardware) || {};
+    var box = $('hw');
+    box.innerHTML = '';
+    var parts = [];
+    if (d.gpu) parts.push('GPU：' + d.gpu);
+    if (d.vram_total_gb != null) parts.push('显存：' + d.vram_total_gb + 'GB');
+    if (d.ram_total_gb != null) parts.push('内存：' + d.ram_total_gb + 'GB');
+    if (d.compute_cap) parts.push('算力：' + d.compute_cap);
+    if (d.disk_free_gb != null) parts.push('磁盘可用：' + d.disk_free_gb + 'GB');
+    if (!parts.length) parts.push('硬件：无法检测');
+    parts.forEach(function (t) {
+      var s = document.createElement('span');
+      s.className = 'chip'; s.textContent = t; box.appendChild(s);
+    });
+  }
+
+  function showErr(msg) {
+    var e = $('err');
+    e.textContent = msg;
+    e.hidden = false;
+  }
+
+  /* ---------------- 启动 + 进度 ---------------- */
+
+  var startedAt = 0, warn60 = false, warn180 = false;
+
+  $('go').addEventListener('click', function () {
+    var variant = $('mode').value;
+    if (!variant) return;
+    $('go').disabled = true;
+    $('mode').disabled = true;
+    $('err').hidden = true;
+    $('text').textContent = '正在冷启动…';
+    $('dot').className = 'dot on';
+    startedAt = Date.now();
+    tick();
+    timers.push(setInterval(tick, 1000));
+
+    api('/load', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ variant: variant }),
+    }).then(function () {
+      pollUntilReady();
+    }).catch(function (e) {
+      timers.forEach(clearInterval); timers = [];
+      $('dot').className = 'dot';
+      $('go').disabled = false;
+      $('mode').disabled = false;
+      $('text').textContent = '启动失败';
+      $('bar').style.width = '0%';
+      showErr((e.message || String(e)));
+    });
+  });
+
+  function tick() {
+    var sec = Math.round((Date.now() - startedAt) / 1000);
+    $('elapsed').hidden = false;
+    $('elapsed').textContent = '已用时 ' + sec + 's' + (sec < 90 ? '（预计 60–90s）' : '');
+    // 无真实百分比：按预期 90s 渐近填充，最多 95%
+    var pct = Math.min(95, Math.round(sec / 90 * 100));
+    $('bar').style.width = pct + '%';
+    if (sec >= 60 && !warn60) {
+      warn60 = true;
+      $('warn').hidden = false;
+      $('warn').textContent = '已用时 60s，仍在载入权重，请继续等待。';
+    }
+    if (sec >= 180 && !warn180) {
+      warn180 = true;
+      $('warn').hidden = false;
+      $('warn').textContent = '已用时 180s。首次启动会建立权重索引缓存，属正常现象；若长时间无进展请查看平台「日志」页。';
+    }
+  }
+
+  function pollUntilReady() {
+    if (polling) return;
+    polling = true;
+    var deadline = Date.now() + 10 * 60 * 1000;
+    var step = function () {
+      api('/status').then(function (s) {
+        var st = s.state;
+        $('text').textContent = st === 'loading' ? '加载中…'
+          : st === 'ready' || st === 'inferring' ? '已就绪，正在进入界面…' : '等待就绪…';
+        if (st === 'ready' || st === 'inferring') {
+          timers.forEach(clearInterval); timers = [];
+          $('bar').style.width = '100%';
+          setTimeout(function () { location.replace('/ui/'); }, 500);
+          return;
+        }
+        if (st === 'error') {
+          timers.forEach(clearInterval); timers = [];
+          $('dot').className = 'dot';
+          $('go').disabled = false; $('mode').disabled = false;
+          $('text').textContent = '引擎进入错误状态';
+          showErr('引擎启动后进入 error 状态，请查看平台「日志」页获取详情。');
+          return;
+        }
+        if (Date.now() > deadline) {
+          showErr('等待引擎就绪超时（10 分钟）。请查看平台「日志」页。');
+          return;
+        }
+        setTimeout(step, 2000);
+      }).catch(function () { setTimeout(step, 2000); });
+    };
+    step();
+  }
+})();
+</script>
+</body>
+</html>

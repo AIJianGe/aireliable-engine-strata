@@ -1,0 +1,228 @@
+/* ==========================================================================
+ * Strata LLM 引擎 · 平台适配注入层（样式）
+ * --------------------------------------------------------------------------
+ * 由 server.py 在反代原生 index.html 时以 <link> 注入（见 /ui/{path} 路由）。
+ * 只定义 .pf-* 前缀的新组件，**不覆盖** 原生 .st-* 样式；
+ * 唯一例外是隐藏原生「Model settings」卡片（其 POST /config 下次启动才生效，
+ * 与平台「模式冷切换」语义冲突，见 §12.4 决策 3）。
+ *
+ * 颜色优先复用原生设计 token（自动适配深色模式），并给出兜底值 ——
+ * 这样即使原生 tokens.css 未加载，注入层也不会崩成透明/黑块。
+ * ========================================================================== */
+
+/* ----- 原生「Model settings」卡片：平台侧不暴露（避免语义冲突） ----- */
+#cfg-card { display: none !important; }
+
+/* ============================ 顶部平台条 ============================ */
+.pf-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  background: var(--st-surface-2, #f7f7f7);
+  border-bottom: 1px solid var(--st-line, #dee5ee);
+  color: var(--st-ink, #221e1f);
+  font: 400 13px/1.4 var(--st-font, system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif);
+  position: relative;
+  z-index: 5;
+}
+
+.pf-bar__brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.pf-bar__brand small {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--st-ink-muted, #6f6f6f);
+  padding: 1px 6px;
+  border: 1px solid var(--st-line, #dee5ee);
+  border-radius: 999px;
+}
+
+.pf-bar__sep {
+  width: 1px;
+  height: 18px;
+  background: var(--st-line, #dee5ee);
+  flex: none;
+}
+
+.pf-bar__spacer { flex: 1 1 auto; }
+
+/* 模式选择 */
+.pf-select {
+  appearance: none;
+  background: var(--st-surface, #fff);
+  color: var(--st-ink, #221e1f);
+  border: 1px solid var(--st-line, #dee5ee);
+  border-radius: 8px;
+  padding: 5px 26px 5px 10px;
+  font: inherit;
+  max-width: 340px;
+  cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+                    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+.pf-select:disabled { opacity: .55; cursor: progress; }
+
+/* 按钮 */
+.pf-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--st-line, #dee5ee);
+  background: var(--st-surface, #fff);
+  color: var(--st-ink, #221e1f);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pf-btn:hover:not(:disabled) { border-color: var(--st-accent, #10b981); }
+.pf-btn:disabled { opacity: .55; cursor: not-allowed; }
+.pf-btn--primary {
+  background: var(--st-accent, #10b981);
+  border-color: var(--st-accent, #10b981);
+  color: var(--st-accent-ink, #fff);
+}
+.pf-btn--primary:hover:not(:disabled) { background: var(--st-accent-hover, #0c8a60); }
+
+/* 状态胶囊 */
+.pf-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--st-line, #dee5ee);
+  background: var(--st-surface, #fff);
+  white-space: nowrap;
+}
+.pf-pill__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--st-ink-muted, #6f6f6f);
+  flex: none;
+}
+.pf-pill[data-state="ready"] .pf-pill__dot { background: var(--st-accent, #10b981); }
+.pf-pill[data-state="loading"] .pf-pill__dot,
+.pf-pill[data-state="inferring"] .pf-pill__dot {
+  background: var(--st-warn, #e39b0b);
+  animation: pf-blink 1s ease-in-out infinite;
+}
+.pf-pill[data-state="error"] .pf-pill__dot { background: var(--st-danger, #e0283f); }
+@keyframes pf-blink { 0%, 100% { opacity: 1 } 50% { opacity: .25 } }
+
+.pf-bar__hw {
+  font-size: 12px;
+  color: var(--st-ink-muted, #6f6f6f);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 360px;
+}
+.pf-bar__elapsed {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--st-warn-text, #8a5a00);
+  white-space: nowrap;
+}
+
+/* ============================ 弹窗 ============================ */
+.pf-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, .45);
+  padding: 20px;
+}
+.pf-modal[hidden] { display: none !important; }
+.pf-modal__panel {
+  width: min(560px, 100%);
+  max-height: 86vh;
+  overflow: auto;
+  background: var(--st-surface, #fff);
+  color: var(--st-ink, #221e1f);
+  border: 1px solid var(--st-line, #dee5ee);
+  border-radius: 14px;
+  padding: 18px 20px;
+  font: 400 14px/1.6 var(--st-font, system-ui, sans-serif);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .28);
+}
+.pf-modal__title { font-size: 16px; font-weight: 700; margin: 0 0 10px; }
+.pf-modal__body { color: var(--st-ink-soft, #303030); }
+.pf-modal__body p { margin: 0 0 8px; }
+.pf-modal__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+.pf-modal__warn {
+  margin: 10px 0 0;
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: var(--st-warn-tint, #fff6e0);
+  color: var(--st-warn-text, #8a5a00);
+  font-size: 13px;
+}
+.pf-modal__err {
+  margin: 10px 0 0;
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: var(--st-danger-tint, #fdecee);
+  color: var(--st-danger-text, #b01a2e);
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 220px;
+  overflow: auto;
+}
+
+/* ============================ Toast ============================ */
+.pf-toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 380px;
+}
+.pf-toast {
+  padding: 10px 13px;
+  border-radius: 10px;
+  border: 1px solid var(--st-line, #dee5ee);
+  background: var(--st-surface, #fff);
+  color: var(--st-ink, #221e1f);
+  font: 400 13px/1.5 var(--st-font, system-ui, sans-serif);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+  border-left-width: 4px;
+  word-break: break-word;
+}
+.pf-toast__title { font-weight: 700; }
+.pf-toast__msg { color: var(--st-ink-muted, #6f6f6f); }
+.pf-toast--success { border-left-color: var(--st-accent, #10b981); }
+.pf-toast--warn { border-left-color: var(--st-warn, #e39b0b); }
+.pf-toast--error {
+  border-left-color: var(--st-danger, #e0283f);
+  cursor: pointer;
+  background: var(--st-danger-tint, #fdecee);
+  color: var(--st-danger-text, #b01a2e);
+}
+.pf-toast--error .pf-toast__msg { color: inherit; }
+.pf-toast--info { border-left-color: var(--st-line, #dee5ee); }

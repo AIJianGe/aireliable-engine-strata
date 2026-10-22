@@ -1,0 +1,28 @@
+Strata LLM 引擎 WebUI —— 第三方资产署名（NOTICE）
+=================================================
+
+本目录**不再存放任何 Strata 项目的文件副本**（零拷贝）。
+引擎界面 = Strata 官方原生 WebUI（https://github.com/Niko1221/Strata），
+其全部静态资源（index.html / app.js / app.css / tokens.css / components.css /
+sprite.svg / fonts/*）在运行时由 ``server.py`` 的 ``/ui/{path}`` 路由
+**逐请求从 Strata 源码目录反代**（``config.strata_src_dir/serve/web``），
+因此上游升级后无需同步、也不存在双源漂移。
+
+本目录仅保留平台自己写的 3 个文件：
+
+  - launcher.html     引擎未加载时的 ``/ui/`` 兜底启动页（自包含、无外部依赖）
+  - _platform.js      平台适配注入层（模式冷切换 / 状态轮询 / 硬件摘要 / 中文提示）
+  - _platform.css     注入层样式（.pf-* 前缀，不复写原生 .st-*）
+
+注入方式：反代原生 index.html 时，在其 ``</body>`` 前拼接
+``<link href="/ui/_platform.css">`` 与 ``<script src="/ui/_platform.js" defer>``。
+``/ui/_platform.*`` 由 7010 本地提供，不参与反代。
+
+许可：
+  - Strata 项目：MIT License（见上游仓库 LICENSE，运行时读取，本仓库不复制）
+  - 字体 Outfit：SIL Open Font License 1.1（上游 serve/web/fonts/OFL.txt）
+
+平台侧适配调整（不修改上游文件，仅在响应流中注入）：
+  - 隐藏原生「Model settings」卡片（其 ``POST /config`` 下次启动才生效，
+    与平台「模式冷切换」语义冲突）
+  - 不暴露原生独立监控页 ``/api-monitor``（原生 Monitor Tab 已内嵌，够用）
