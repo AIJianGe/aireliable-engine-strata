@@ -1,6 +1,6 @@
 engine_id: strata_llm_7c4f2b91
 engine_name: Strata
-engine_version: 0.1.0
+engine_version: 1.0.0
 aireliable_compat: '>=0.0.16'
 uv_env_name: llm-strata
 export_mode: source
@@ -37,10 +37,10 @@ source:
   type: github
   github_repo: Niko1221/Strata
 
-# R22：官方二进制更新检查关闭（避免误升级导致运行时不一致）
+# R22：改为检查自家引擎仓库 tag（2026-11-02）
 upgrade:
-  check_url: https://api.github.com/repos/Niko1221/Strata/releases/latest
-  auto_check: false
+  check_url: https://api.github.com/repos/AIJianGe/aireliable-engine-strata/releases/latest
+  auto_check: true
 
 node_packages: []
 
