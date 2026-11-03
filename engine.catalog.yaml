@@ -1,0 +1,43 @@
+# 开源引擎中心展示元数据（任务 80 / T4.1）
+schema: 1
+engine_id: strata_llm_7c4f2b91
+
+name:
+  zh: "Strata 大模型推理"
+  en: "Strata"
+
+description:
+  zh: "Strata 大模型推理引擎：Qwen3.8-Flash-Next 125B MoE，GGUF 分片加载，提供 6 种命名推理模式。"
+  en: "Strata LLM inference engine for Qwen3.8-Flash-Next 125B MoE with sharded GGUF loading and six preset reasoning modes."
+
+category: llm
+tags:
+  - llm
+  - moe
+  - gguf
+
+repository:
+  github: AIJianGe/aireliable-engine-strata
+  gitee: AIJianGe/aireliable-engine-strata
+
+cover: catalog/covers/strata_llm_7c4f2b91.webp
+
+requirements:
+  python: ">=3.10,<3.13"
+  gpu: optional
+
+license: PolyForm-Noncommercial-1.0.0
+
+description_long:
+  zh: |-
+    Strata 面向 Qwen3.8-Flash-Next 125B MoE 模型，采用 GGUF 分片加载，把超大模型按层分片映射到显存与内存，降低单卡装载门槛。
+
+    引擎内置 6 种命名推理模式，可在生成速度、显存占用与推理深度之间切换；对外统一提供 OpenAI 兼容接口，接入方式与其他大模型引擎一致。
+
+    GPU 为可选项：有显卡时按可用显存自动分配层数，无显卡时以纯 CPU 运行但速度明显下降。适合需要更强中文理解与长文推理的本地私有化场景。
+  en: |-
+    Strata targets the Qwen3.8-Flash-Next 125B MoE model and loads it as sharded GGUF files, mapping layers across VRAM and system memory to lower the bar for single-GPU deployment.
+
+    Six named reasoning modes let you trade off generation speed, memory footprint and reasoning depth, and the engine exposes a unified OpenAI-compatible API just like the other LLM engines.
+
+    GPU is optional: with a card, layer counts are assigned automatically from available VRAM; without one, it runs on CPU with a clear speed penalty. Suited to private local deployments that need stronger Chinese comprehension and long-context reasoning.

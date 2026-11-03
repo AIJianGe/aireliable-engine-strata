@@ -47,6 +47,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from aireliable_engine import EngineConfig as BaseEngineConfig
+
 logger = logging.getLogger(__name__)
 
 # ===== 常量 =====
@@ -115,7 +117,7 @@ MODEL_SUBDIR = _resolve_model_subdir()
 
 
 @dataclass
-class EngineConfig:
+class EngineConfig(BaseEngineConfig):
     """Strata LLM 引擎运行配置。
 
     通过环境变量 + 命令行参数构造。
@@ -127,13 +129,6 @@ class EngineConfig:
     capability: str = CAPABILITY
     engine_type: str = ENGINE_TYPE
     port: int = DEFAULT_PORT
-    host: str = "127.0.0.1"
-
-    # ===== 路径 =====
-    models_root: Path = Path("models")           # 模型根目录（AIRELIABLE_MODELS_ROOT）
-    data_root: Path = Path("data")               # 运行时数据根目录
-    project_root: Path = Path(".")               # 项目根
-    output_root: Path = Path("output")           # 产物根目录（生成文本按类型分子目录）
 
     # ===== 推导路径 =====
     model_dir: Path = field(init=False)          # GGUF 模型目录（llm/checkpoints/strata/）
@@ -171,19 +166,9 @@ class EngineConfig:
     health_check_interval: float = DEFAULT_HEALTH_CHECK_INTERVAL
     spec: int = DEFAULT_SPEC                     # MTP 投机解码深度（0 = 关闭）
 
-    # ===== 设备 =====
-    # auto：有 CUDA 则用 GPU，否则 CPU；gpu：强制 GPU；cpu：强制 CPU
-    device: str = "auto"
-
     # ===== 默认 variant（模式）=====
     # 优先级：manifest.models.default_variant > 此处 config.default_variant > None
     default_variant: Optional[str] = None
-
-    # ===== 平台 API =====
-    core_url: Optional[str] = None               # 平台 core URL（AIRELIABLE_CORE_URL）
-
-    # ===== 日志 =====
-    log_level: str = "INFO"
 
     def __post_init__(self) -> None:
         """推导子路径、统一绝对化并创建运行时目录。

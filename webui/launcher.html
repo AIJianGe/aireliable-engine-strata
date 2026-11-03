@@ -29,7 +29,7 @@
   html,body{height:100%;margin:0}
   body{
     background:var(--bg); color:var(--ink); display:flex; align-items:center; justify-content:center;
-    padding:24px;
+    padding:24px; overflow:auto;
     font:400 14px/1.6 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
   }
   .card{
@@ -99,8 +99,14 @@
   <div class="err" id="err" hidden></div>
 
   <p class="hint">提示：也可以在平台「引擎详情页」启动本引擎；启动完成后本页会自动跳转到原生界面。</p>
+
+  <!-- 模型清单（SDK 共享组件：GET /models，与平台「引擎详情 → 模型管理」同口径） -->
+  <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);">
+    <div id="sdk-model-inventory" data-open="false"></div>
+  </div>
 </div>
 
+<script src="/sdk/model-inventory.js?v=0.5.0"></script>
 <script>
 (function () {
   'use strict';
